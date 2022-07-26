@@ -37,6 +37,7 @@ from posthog.queries.paths import Paths
 from posthog.queries.retention import Retention
 from posthog.queries.stickiness import Stickiness
 from posthog.queries.trends.trends import Trends
+from posthog.redis import get_client
 from posthog.types import FilterType
 from posthog.utils import generate_cache_key
 
@@ -50,6 +51,38 @@ CACHE_TYPE_TO_INSIGHT_CLASS = {
     CacheType.RETENTION: Retention,
     CacheType.PATHS: Paths,
 }
+
+
+def update_filters_hash_caches() -> None:
+    # get everything
+    # try to queue it behind redis lock
+    dashboard_tiles = (
+        DashboardTile.objects.exclude(dashboard__deleted=True)
+        .exclude(insight__deleted=True)
+        .exclude(insight__filters={})
+        .select_related("insight", "dashboard")
+        .order_by(F("dashboard__last_accessed_at").desc(nulls_first=True))
+    )
+    for tile in dashboard_tiles.iterator():
+        push_to_queue(tile.insight, tile.dashboard)
+
+    shared_insights = (
+        Insight.objects.filter(sharingconfiguration__enabled=True)
+        .exclude(deleted=True)
+        .exclude(filters={})
+        .order_by(F("last_modified_at").asc(nulls_first=True))
+    )
+    for insight in shared_insights.iterator():
+        push_to_queue(insight, None)
+
+
+def push_to_queue(insight: Insight, dashboard: Optional[Dashboard]) -> None:
+    cache_key, cache_type, payload = insight_update_task_params(insight, dashboard)
+    update_filters_hash(cache_key, dashboard, insight)
+    was_set = get_client().set(name=f"processing-{cache_key}", value=cache_key, nx=True, ex=180)
+    if was_set:
+        logger.info("update_cache.acquired_lock_for_key", cache_key=cache_key)
+        update_cache_item_task.s(cache_key, cache_type, payload).apply_async()
 
 
 def update_cached_items() -> Tuple[int, int]:

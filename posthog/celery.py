@@ -423,9 +423,20 @@ def calculate_cohort():
 
 @app.task(ignore_result=True)
 def check_cached_items():
-    from posthog.tasks.update_cache import update_cached_items
+    import structlog
 
-    update_cached_items()
+    logger = structlog.get_logger(__name__)
+    try:
+        from posthog.models.instance_setting import get_instance_setting
+        from posthog.tasks.update_cache import update_cached_items, update_filters_hash_caches
+
+        if get_instance_setting("ENABLE_TURBO_INSIGHT_CACHE"):
+            update_filters_hash_caches()
+        else:
+            update_cached_items()
+    except Exception as ex:
+        logger.error("check_cached_items.error", ex=ex, exc_info=True)
+        raise ex
 
 
 @app.task(ignore_result=False)
@@ -437,6 +448,7 @@ def update_cache_item_task(key: str, cache_type, payload: dict) -> None:
     from posthog.tasks.update_cache import update_cache_item
 
     update_cache_item(key, cache_type, payload)
+    get_client().delete(f"processing-{key}")
 
 
 @app.task(ignore_result=True)

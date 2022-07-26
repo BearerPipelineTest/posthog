@@ -1,6 +1,7 @@
 from copy import copy
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
+from unittest import skip
 from unittest.mock import MagicMock, patch
 
 import pytz
@@ -89,6 +90,12 @@ def _create_dashboard_tile_with_known_cache_key(
         assert insight.filters_hash == cache_key
 
     return dashboard, tile
+
+
+class TestTurboCacheUpdate(APIBaseTest):
+    @skip("how to patch get_client???")
+    def test_update_cache_item_deletes_lock_key(self) -> None:
+        pass
 
 
 class TestSynchronousCacheUpdate(APIBaseTest):

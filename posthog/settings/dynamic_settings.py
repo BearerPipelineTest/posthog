@@ -129,6 +129,11 @@ CONSTANCE_CONFIG = {
         "Used to validate Slack events for example when unfurling links",
         str,
     ),
+    "ENABLE_TURBO_INSIGHT_CACHE": (
+        get_from_env("ENABLE_TURBO_INSIGHT_CACHE", default=False, type_cast=str_to_bool),
+        "Whether to run the new insight cache mechanism.",
+        bool,
+    ),
 }
 
 SETTINGS_ALLOWING_API_OVERRIDE = (
@@ -154,6 +159,7 @@ SETTINGS_ALLOWING_API_OVERRIDE = (
     "SLACK_APP_CLIENT_ID",
     "SLACK_APP_CLIENT_SECRET",
     "SLACK_APP_SIGNING_SECRET",
+    "ENABLE_TURBO_INSIGHT_CACHE",
 )
 
 # SECRET_SETTINGS can only be updated but will never be exposed through the API (we do store them plain text in the DB)
