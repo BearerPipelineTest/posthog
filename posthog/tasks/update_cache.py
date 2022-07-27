@@ -54,8 +54,6 @@ CACHE_TYPE_TO_INSIGHT_CLASS = {
 
 
 def update_filters_hash_caches() -> None:
-    # get everything
-    # try to queue it behind redis lock
     dashboard_tiles = (
         DashboardTile.objects.exclude(dashboard__deleted=True)
         .exclude(insight__deleted=True)
@@ -79,10 +77,13 @@ def update_filters_hash_caches() -> None:
 def push_to_queue(insight: Insight, dashboard: Optional[Dashboard]) -> None:
     cache_key, cache_type, payload = insight_update_task_params(insight, dashboard)
     update_filters_hash(cache_key, dashboard, insight)
-    was_set = get_client().set(name=f"processing-{cache_key}", value=cache_key, nx=True, ex=180)
+    was_set = bool(get_client().set(name=f"processing-{cache_key}", value=cache_key, nx=True, ex=180))
+    tags = {"cache_key": cache_key, "insight_id": insight.id, "dashboard_id": "None" if not dashboard else dashboard.id}
     if was_set:
-        logger.info("update_cache.acquired_lock_for_key", cache_key=cache_key)
+        statsd.incr("update_cache.acquired_lock_for_key", tags=tags)
         update_cache_item_task.s(cache_key, cache_type, payload).apply_async()
+    else:
+        statsd.incr("update_cache.skipped_already_cached_key", tags=tags)
 
 
 def update_cached_items() -> Tuple[int, int]:
