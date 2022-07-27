@@ -1,8 +1,7 @@
 from copy import copy
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Tuple
-from unittest import skip
-from unittest.mock import MagicMock, patch
+from typing import Any, Dict, List, Optional, Tuple
+from unittest.mock import ANY, MagicMock, call, patch
 
 import pytz
 from django.utils.timezone import now
@@ -22,6 +21,7 @@ from posthog.tasks.update_cache import (
     synchronously_update_insight_cache,
     update_cache_item,
     update_cached_items,
+    update_filters_hash_caches,
 )
 from posthog.test.base import APIBaseTest
 from posthog.types import FilterType
@@ -35,9 +35,9 @@ def create_shared_dashboard(team: Team, is_shared: bool = False, **kwargs: Any) 
     return dashboard
 
 
-def create_shared_insight(team: Team, is_shared: bool = False, **kwargs: Any) -> Insight:
+def create_shared_insight(team: Team, is_enabled: bool = False, **kwargs: Any) -> Insight:
     insight = Insight.objects.create(team=team, **kwargs)
-    SharingConfiguration.objects.create(team=team, insight=insight, enabled=is_shared)
+    SharingConfiguration.objects.create(team=team, insight=insight, enabled=is_enabled)
 
     return insight
 
@@ -93,9 +93,45 @@ def _create_dashboard_tile_with_known_cache_key(
 
 
 class TestTurboCacheUpdate(APIBaseTest):
-    @skip("how to patch get_client???")
-    def test_update_cache_item_deletes_lock_key(self) -> None:
-        pass
+    @patch("posthog.celery.update_cache_item_task.s")
+    def test_does_not_queue_a_task_if_the_cache_key_is_already_queued(self, patch_update_cache_item: MagicMock) -> None:
+        tile_one = _a_dashboard_tile_with_known_last_refresh(self.team, last_refresh_date=None)
+        tile_two = _a_dashboard_tile_with_known_last_refresh(self.team, last_refresh_date=None)
+
+        insight_that_matches_tiles = create_shared_insight(
+            team=self.team, is_enabled=True, filters={"events": [{"id": "$pageview"}]}
+        )
+        insight_with_different_cache_key = create_shared_insight(
+            team=self.team, is_enabled=True, filters={"events": [{"id": "$rageclick"}]}
+        )
+
+        assert tile_one.filters_hash == tile_two.filters_hash
+        assert insight_that_matches_tiles.filters_hash == tile_one.filters_hash
+        assert insight_that_matches_tiles.filters_hash != insight_with_different_cache_key.filters_hash
+
+        seen_keys: List[str] = []
+
+        def fake_redis_set(name: str, value: str, **kwargs: Any) -> bool:
+            if value in seen_keys:
+                return False
+            else:
+                seen_keys.append(value)
+                return True
+
+        with patch("posthog.tasks.update_cache.get_client") as mock_get_client:
+            mock_set = MagicMock(create=True)
+            mock_set.side_effect = fake_redis_set
+
+            mock_get_client.return_value.set = mock_set
+            update_filters_hash_caches()
+
+            assert seen_keys == [tile_one.filters_hash, insight_with_different_cache_key.filters_hash]
+            assert patch_update_cache_item.mock_calls == [
+                call(tile_one.filters_hash, ANY, ANY),
+                call().apply_async(),
+                call(insight_with_different_cache_key.filters_hash, ANY, ANY),
+                call().apply_async(),
+            ]
 
 
 class TestSynchronousCacheUpdate(APIBaseTest):
@@ -717,16 +753,16 @@ class TestUpdateCache(APIBaseTest):
             "properties": [{"key": "$browser", "value": "Mac OS X"}],
         }
 
-        shared_insight = create_shared_insight(team=self.team, is_shared=True, filters=filter_dict)
-        shared_insight_without_filters = create_shared_insight(team=self.team, is_shared=True, filters={})
-        shared_insight_deleted = create_shared_insight(team=self.team, is_shared=True, deleted=True)
-        shared_insight_refreshing = create_shared_insight(team=self.team, is_shared=True, refreshing=True)
+        shared_insight = create_shared_insight(team=self.team, is_enabled=True, filters=filter_dict)
+        shared_insight_without_filters = create_shared_insight(team=self.team, is_enabled=True, filters={})
+        shared_insight_deleted = create_shared_insight(team=self.team, is_enabled=True, deleted=True)
+        shared_insight_refreshing = create_shared_insight(team=self.team, is_enabled=True, refreshing=True)
 
         # Valid insights within the PARALLEL_INSIGHT_CACHE count
         other_insights_in_range = [
             create_shared_insight(
                 team=self.team,
-                is_shared=True,
+                is_enabled=True,
                 filters=filter_dict,
                 last_refresh=datetime(2022, 1, 1).replace(tzinfo=pytz.utc),
             )
@@ -737,7 +773,7 @@ class TestUpdateCache(APIBaseTest):
         other_insights_out_of_range = [
             create_shared_insight(
                 team=self.team,
-                is_shared=True,
+                is_enabled=True,
                 filters=filter_dict,
                 last_refresh=datetime(2022, 1, 2).replace(tzinfo=pytz.utc),
             )
