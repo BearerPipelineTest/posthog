@@ -6,13 +6,13 @@ from freezegun import freeze_time
 from rest_framework.exceptions import ValidationError
 
 from posthog.constants import FILTER_TEST_ACCOUNTS, INSIGHT_FUNNELS
+from posthog.insight_cache.update_cache import update_cache_item
 from posthog.models import Action, ActionStep, Element
 from posthog.models.cohort import Cohort
 from posthog.models.filters import Filter
 from posthog.queries.funnels import ClickhouseFunnel, ClickhouseFunnelActors
 from posthog.queries.funnels.test.breakdown_cases import assert_funnel_results_equal, funnel_breakdown_test_factory
 from posthog.queries.funnels.test.conversion_time_cases import funnel_conversion_time_test_factory
-from posthog.tasks.update_cache import update_cache_item
 from posthog.test.base import (
     APIBaseTest,
     ClickhouseTestMixin,

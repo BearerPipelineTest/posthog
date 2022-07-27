@@ -428,8 +428,8 @@ def check_cached_items():
 
     logger = structlog.get_logger(__name__)
     try:
+        from posthog.insight_cache.update_cache import update_cached_items, update_filters_hash_caches
         from posthog.models.instance_setting import get_instance_setting
-        from posthog.tasks.update_cache import update_cached_items, update_filters_hash_caches
 
         if get_instance_setting("ENABLE_TURBO_INSIGHT_CACHE"):
             update_filters_hash_caches()
