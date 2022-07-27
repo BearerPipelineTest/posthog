@@ -27,6 +27,7 @@ from posthog.constants import (
     FunnelVizType,
 )
 from posthog.decorators import CacheType
+from posthog.insight_cache.cache_update_lock import as_cache_update_lock_key
 from posthog.logging.timing import timed
 from posthog.models import Dashboard, DashboardTile, Filter, Insight, Team
 from posthog.models.filters.stickiness_filter import StickinessFilter
@@ -77,7 +78,7 @@ def update_filters_hash_caches() -> None:
 def push_to_queue(insight: Insight, dashboard: Optional[Dashboard]) -> None:
     cache_key, cache_type, payload = insight_update_task_params(insight, dashboard)
     update_filters_hash(cache_key, dashboard, insight)
-    was_set = bool(get_client().set(name=f"processing-{cache_key}", value=cache_key, nx=True, ex=180))
+    was_set = bool(get_client().set(name=as_cache_update_lock_key(cache_key), value=cache_key, nx=True, ex=180))
     tags = {"cache_key": cache_key, "insight_id": insight.id, "dashboard_id": "None" if not dashboard else dashboard.id}
     if was_set:
         statsd.incr("update_cache.acquired_lock_for_key", tags=tags)

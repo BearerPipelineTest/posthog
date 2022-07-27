@@ -9,6 +9,13 @@ from freezegun import freeze_time
 
 from posthog.constants import ENTITY_ID, ENTITY_TYPE, INSIGHT_STICKINESS
 from posthog.decorators import CacheType
+from posthog.insight_cache.update_cache import (
+    PARALLEL_INSIGHT_CACHE,
+    synchronously_update_insight_cache,
+    update_cache_item,
+    update_cached_items,
+    update_filters_hash_caches,
+)
 from posthog.models import Dashboard, DashboardTile, Filter, Insight
 from posthog.models.filters.retention_filter import RetentionFilter
 from posthog.models.filters.stickiness_filter import StickinessFilter
@@ -16,13 +23,6 @@ from posthog.models.filters.utils import get_filter
 from posthog.models.sharing_configuration import SharingConfiguration
 from posthog.models.team.team import Team
 from posthog.queries.util import get_earliest_timestamp
-from posthog.tasks.update_cache import (
-    PARALLEL_INSIGHT_CACHE,
-    synchronously_update_insight_cache,
-    update_cache_item,
-    update_cached_items,
-    update_filters_hash_caches,
-)
 from posthog.test.base import APIBaseTest
 from posthog.types import FilterType
 from posthog.utils import generate_cache_key, get_safe_cache

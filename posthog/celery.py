@@ -10,6 +10,7 @@ from django.db import connection
 from django.utils import timezone
 from django_structlog.celery.steps import DjangoStructLogInitStep
 
+from posthog.insight_cache.cache_update_lock import clear_cache_update_lock
 from posthog.redis import get_client
 from posthog.utils import get_crontab
 
@@ -445,10 +446,10 @@ def update_cache_item_task(key: str, cache_type, payload: dict) -> None:
     Tasks used in a group (as this is) must not ignore their results
     https://docs.celeryq.dev/en/latest/userguide/canvas.html#groups:~:text=Similarly%20to%20chords%2C%20tasks%20used%20in%20a%20group%20must%20not%20ignore%20their%20results.
     """
-    from posthog.tasks.update_cache import update_cache_item
+    from posthog.insight_cache.update_cache import update_cache_item
 
     update_cache_item(key, cache_type, payload)
-    get_client().delete(f"processing-{key}")
+    clear_cache_update_lock(key)
 
 
 @app.task(ignore_result=True)

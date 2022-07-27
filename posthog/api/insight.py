@@ -43,6 +43,7 @@ from posthog.constants import (
 )
 from posthog.decorators import cached_function
 from posthog.helpers.multi_property_breakdown import protect_old_clients_from_multi_property_default
+from posthog.insight_cache.update_cache import synchronously_update_insight_cache
 from posthog.models import DashboardTile, Filter, Insight, Team, User
 from posthog.models.activity_logging.activity_log import Change, Detail, changes_between, load_activity, log_activity
 from posthog.models.activity_logging.activity_page import activity_page_response
@@ -61,7 +62,6 @@ from posthog.queries.stickiness import Stickiness
 from posthog.queries.trends.trends import Trends
 from posthog.queries.util import get_earliest_timestamp
 from posthog.settings import SITE_URL
-from posthog.tasks.update_cache import synchronously_update_insight_cache
 from posthog.utils import DEFAULT_DATE_FROM_DAYS, get_safe_cache, relative_date_parse, should_refresh, str_to_bool
 
 logger = structlog.get_logger(__name__)

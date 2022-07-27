@@ -1,5 +1,7 @@
 # Make tasks ready for celery autoimport
 
+from posthog.insight_cache import update_cache
+
 from . import (
     async_migrations,
     calculate_cohort,
@@ -11,7 +13,6 @@ from . import (
     split_person,
     status_report,
     sync_all_organization_available_features,
-    update_cache,
     user_identify,
 )
 
